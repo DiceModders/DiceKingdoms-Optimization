@@ -1,0 +1,44 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <AssemblyName>DiceModders.Optimization</AssemblyName>
+    <RootNamespace>DiceModders.Optimization</RootNamespace>
+    <Description>Performance options for Dice Kingdoms: fewer combat particles, lighter unit animation updates, cheaper graphics.</Description>
+    <Version>1.0.0</Version>
+    <Authors>DiceModders</Authors>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <RestoreAdditionalProjectSources>https://api.nuget.org/v3/index.json;https://nuget.bepinex.dev/v3/index.json</RestoreAdditionalProjectSources>
+    <!-- the UiKit library this mod is built against (copied here by scripts\link-uikit.ps1) -->
+    <UiKitDll Condition="'$(UiKitDll)' == ''">$(MSBuildThisFileDirectory)libs/DiceModders.UiKit.dll</UiKitDll>
+  </PropertyGroup>
+
+  <!-- the development build (scripts\build-dev.ps1) defines DEVLOG: extra diagnostics that normal releases do not contain -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
+    <DefineConstants>$(DefineConstants);DEVLOG</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="BepInEx.Unity.IL2CPP" Version="6.0.0-be.*" IncludeAssets="compile" />
+    <!-- Game interop assemblies: junction to <game>/BepInEx/interop, made by scripts\link-interop.ps1 -->
+    <Reference Include="$(MSBuildThisFileDirectory)interop/*.dll" Private="false" />
+    <Reference Include="DiceModders.UiKit" HintPath="$(UiKitDll)" Private="false" />
+  </ItemGroup>
+
+  <Target Name="CheckInputs" BeforeTargets="ResolveAssemblyReferences;CoreCompile">
+    <Error Condition="!Exists('$(MSBuildThisFileDirectory)interop/UnityEngine.CoreModule.dll')"
+           Text="Missing 'interop' folder (or it is empty). Install BepInEx 6 IL2CPP into the game, run the game once so BepInEx\interop is generated, then run scripts\link-interop.ps1 '&lt;game folder&gt;'." />
+    <Error Condition="!Exists('$(UiKitDll)')"
+           Text="Missing libs/DiceModders.UiKit.dll. Run scripts\link-uikit.ps1 (UiKit must be built and installed in the game's BepInEx\plugins first)." />
+  </Target>
+
+  <!-- Optional: set DiceKingdomsDir (env var or -p:DiceKingdomsDir=...) to auto-copy the built plugin into the game. -->
+  <Target Name="CopyToGame" AfterTargets="Build" Condition="'$(DiceKingdomsDir)' != ''">
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(DiceKingdomsDir)/BepInEx/plugins" />
+    <Message Importance="high" Text="Copied $(TargetFileName) to $(DiceKingdomsDir)/BepInEx/plugins" />
+  </Target>
+
+</Project>

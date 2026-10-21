@@ -1,0 +1,14 @@
+bin/
+obj/
+.vs/
+*.user
+# junction to <game>/BepInEx/interop (scripts/link-interop.ps1)
+/interop
+# the UiKit library this mod is built against (scripts/link-uikit.ps1)
+/libs/*.dll
+# remembers your game folder for the scripts
+/.gamedir
+# game-derived files must never be committed
+*.zip
+/.vscode/settings.json
+/dist/
