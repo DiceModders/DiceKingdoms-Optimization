@@ -1,4 +1,5 @@
-# Shared helpers for build.ps1 / build-dev.ps1 / link-*.ps1. Dot-sourced; ASCII only, Windows PowerShell 5.1 compatible.
+# Helpers for build.ps1 (dot-sourced). The same file in every mod: the mod's name comes from the one .csproj in the repo root.
+# ASCII only, Windows PowerShell 5.1 compatible.
 
 function Get-GameDir {
     param([string]$GameDir, [string]$Root)
@@ -6,12 +7,43 @@ function Get-GameDir {
     if ($GameDir) { Set-Content -Path $gameDirFile -Value $GameDir -Encoding UTF8 }
     elseif (Test-Path $gameDirFile) { $GameDir = (Get-Content $gameDirFile -Raw).Trim() }
     elseif ($env:DICEKINGDOMS_DIR) { $GameDir = $env:DICEKINGDOMS_DIR }
-    if (-not $GameDir) { throw "Game folder unknown. Run once:  .\scripts\build.ps1 -GameDir `"D:\...\Dice-Kingdoms`"" }
-    $exe = Join-Path $GameDir "Dice-Kingdoms.exe"
-    $plugins = Join-Path $GameDir "BepInEx\plugins"
-    if (-not (Test-Path $exe)) { throw "Dice-Kingdoms.exe not found in '$GameDir'." }
-    if (-not (Test-Path $plugins)) { throw "'$plugins' does not exist. Install BepInEx 6 IL2CPP and run the game once first." }
+    if (-not $GameDir) { throw "Game folder unknown. Run once:  .\scripts\build.ps1 -GameDir `"<your Dice-Kingdoms folder>`"" }
+    if (-not (Test-Path (Join-Path $GameDir "Dice-Kingdoms.exe"))) { throw "Dice-Kingdoms.exe not found in '$GameDir'." }
+    if (-not (Test-Path (Join-Path $GameDir "BepInEx\plugins"))) { throw "BepInEx\plugins does not exist in '$GameDir'. Install BepInEx 6 IL2CPP and run the game once first." }
     return $GameDir
+}
+
+function Get-Project {
+    param([string]$Root)
+    $p = Get-ChildItem $Root -Filter "*.csproj" | Select-Object -First 1
+    if (-not $p) { throw "No .csproj in '$Root'." }
+    return $p
+}
+
+function Get-Libraries {
+    # the libraries a mod is compiled against: every <Reference Include="DiceModders.X" ...> in the .csproj
+    param([string]$Project)
+    return [regex]::Matches((Get-Content $Project -Raw), 'Reference Include="(DiceModders\.[A-Za-z]+)"') | ForEach-Object { $_.Groups[1].Value }
+}
+
+function Initialize-Links {
+    # interop: a junction to <game>\BepInEx\interop. libs: copies of the libraries from <game>\BepInEx\plugins (players install them there too).
+    param([string]$Root, [string]$GameDir, [string]$Project)
+    $interop = Join-Path $Root "interop"
+    if (-not (Test-Path (Join-Path $interop "UnityEngine.CoreModule.dll"))) {
+        $src = Join-Path $GameDir "BepInEx\interop"
+        if (-not (Test-Path $src)) { throw "'$src' does not exist: start the game once with BepInEx so it generates the interop assemblies." }
+        if (Test-Path $interop) { Remove-Item $interop -Force -Recurse }
+        New-Item -ItemType Junction -Path $interop -Target $src | Out-Null
+        Write-Host "interop -> $src"
+    }
+    $libs = Join-Path $Root "libs"
+    New-Item -ItemType Directory -Force -Path $libs | Out-Null
+    foreach ($lib in (Get-Libraries $Project)) {
+        $dll = Join-Path $GameDir "BepInEx\plugins\$lib.dll"
+        if (-not (Test-Path $dll)) { throw "$lib.dll is not in BepInEx\plugins. Install that library first (see the README)." }
+        Copy-Item $dll (Join-Path $libs "$lib.dll") -Force   # always the installed version: the mod is built against what players run
+    }
 }
 
 function Set-CfgValue {
@@ -20,21 +52,11 @@ function Set-CfgValue {
     if (-not (Test-Path $Path)) { return $false }
     $lines = New-Object System.Collections.Generic.List[string]
     foreach ($l in (Get-Content $Path)) { [void]$lines.Add($l) }
-    $inSection = $false
-    $sectionIndex = -1
-    $done = $false
+    $inSection = $false; $sectionIndex = -1; $done = $false
     for ($i = 0; $i -lt $lines.Count; $i++) {
         $t = $lines[$i].Trim()
-        if ($t -match '^\[(.+)\]$') {
-            $inSection = ($Matches[1] -eq $Section)
-            if ($inSection) { $sectionIndex = $i }
-            continue
-        }
-        if ($inSection -and ($t -match ('^' + [regex]::Escape($Key) + '\s*='))) {
-            $lines[$i] = "$Key = $Value"
-            $done = $true
-            break
-        }
+        if ($t -match '^\[(.+)\]$') { $inSection = ($Matches[1] -eq $Section); if ($inSection) { $sectionIndex = $i }; continue }
+        if ($inSection -and ($t -match ('^' + [regex]::Escape($Key) + '\s*='))) { $lines[$i] = "$Key = $Value"; $done = $true; break }
     }
     if (-not $done) {
         if ($sectionIndex -ge 0) { $lines.Insert($sectionIndex + 1, "$Key = $Value") }
@@ -45,40 +67,12 @@ function Set-CfgValue {
 }
 
 function Set-BepInExLogging {
-    # $On = $true : BepInEx console window + LogOutput.log (development).  $On = $false : no console, no log file (normal use).
+    # On: BepInEx console window + LogOutput.log (development). Off: neither (playing).
     param([string]$GameDir, [bool]$On)
     $cfg = Join-Path $GameDir "BepInEx\config\BepInEx.cfg"
-    if (-not (Test-Path $cfg)) {
-        Write-Warning "BepInEx.cfg not found (run the game once so BepInEx creates it), console / log settings were not changed."
-        return
-    }
-    $v = "false"
-    if ($On) { $v = "true" }
+    if (-not (Test-Path $cfg)) { Write-Warning "BepInEx.cfg not found (run the game once), console / log settings not changed."; return }
+    $v = if ($On) { "true" } else { "false" }
     [void](Set-CfgValue $cfg "Logging.Console" "Enabled" $v)
     [void](Set-CfgValue $cfg "Logging.Disk" "Enabled" $v)
-    if ($On) { Write-Host "BepInEx console window and log file: ON (from the next game start)." -ForegroundColor Yellow }
-    else { Write-Host "BepInEx console window and log file: OFF (from the next game start)." -ForegroundColor Green }
-}
-
-function Initialize-Links {
-    # makes sure the interop junction (and, when the mod uses it, libs\DiceModders.UiKit.dll) exist
-    param([string]$Root, [string]$GameDir)
-    if (-not (Test-Path (Join-Path $Root "interop\UnityEngine.CoreModule.dll"))) { & (Join-Path $PSScriptRoot "link-interop.ps1") $GameDir }
-    if (-not (Test-Path (Join-Path $Root "libs\DiceModders.UiKit.dll"))) { & (Join-Path $PSScriptRoot "link-uikit.ps1") -GameDir $GameDir }
-}
-
-function Build-Mod {
-    param([string]$Root, [string]$Configuration)
-    dotnet build (Join-Path $Root "DiceModders.Optimization.csproj") -c $Configuration --nologo -v q "-p:NoWarn=NU1603"
-    if ($LASTEXITCODE -ne 0) { throw "Build failed (see errors above)." }
-}
-
-function Install-Mod {
-    param([string]$Root, [string]$Configuration, [string]$Plugins)
-    $dllName = "DiceModders.Optimization.dll"
-    $dll = Get-ChildItem $Root -Recurse -Filter $dllName |
-        Where-Object { $_.FullName -match ("\\bin\\" + $Configuration + "\\") } | Select-Object -First 1
-    if (-not $dll) { throw "$dllName not found after the build." }
-    Copy-Item $dll.FullName $Plugins -Force
-    Write-Host "  installed $dllName"
+    Write-Host ("BepInEx console window and log file: " + $(if ($On) { "ON" } else { "OFF" }) + " (from the next game start).")
 }

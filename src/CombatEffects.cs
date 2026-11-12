@@ -1,70 +1,45 @@
-using BepInEx.Configuration;
-using DiceModders.Shared;
+using DiceModders.ModCore.Tools;
 
 namespace DiceModders.Optimization;
 
 /// <summary>
 /// Combat visuals that cost frames but do not change the simulation:
-///  * "No combat particles": UnitVisual.SpawnParticles (parry / death / conversion effects) is skipped. In a big battle one of these pooled
-///    effects is started for almost every unit hit.
-///  * "Unit animation updates every N frames": UnitVisual.Update runs once per rendered frame for every unit and recomputes its position,
-///    spring physics and four Animator parameters. With 100+ units that is the biggest per-frame cost of a battle. Updating each unit only every
-///    2nd..4th frame (staggered, so not all units skip the same frame) cuts that cost to a half .. quarter. A unit's position is always
-///    taken from the simulation, so a skipped frame only makes its movement a little less smooth - nothing the other players depend on.
-///
-/// The simulation itself (CombatGrid.SimulationStep) is deterministic lock-step logic that every machine must run identically, so it is never touched.
+///  * No combat particles: <c>UnitVisual.SpawnParticles</c> (parry / death / conversion effects) is skipped. In a big battle one of these pooled effects
+///    is started for almost every hit.
+///  * Unit animation every N frames: <c>UnitVisual.Update</c> runs every frame for every unit (position, spring physics, four Animator parameters).
+///    With 100+ units that is the biggest per-frame cost of a battle. Updating each unit only every 2nd..4th frame (staggered, so the units do not all
+///    skip the same frame) cuts it to a half .. a quarter. A unit's position always comes from the simulation, so skipping only makes movement a
+///    little less smooth on this computer.
+/// Both patches are only in the game while their option is on (a patch on a per-unit, per-frame method costs time even when it does nothing).
+/// The simulation itself (<c>CombatGrid.SimulationStep</c>) is deterministic lock-step logic every machine must run identically; it is never touched.
 /// </summary>
 internal static class CombatEffects
 {
-    internal static Toggle NoParticles;
-    internal static ConfigEntry<int> UnitUpdateEvery;
+    private static PatchSwitch _particles, _update;
 
-    internal static long ParticleCalls, ParticlesSkipped, UnitUpdatesSeen, UnitUpdatesSkipped;
-
-    internal static void Load(ConfigFile config, Hotkeys keys, Patcher patcher)
+    internal static void Install(Patcher patcher)
     {
-        NoParticles = new Toggle("No combat particles",
-            config.Bind("Combat", "NoParticles", false, "Skip the parry / death / conversion particle effects of units.").Value, ModPlugin.L);
-        UnitUpdateEvery = config.Bind("Combat", "UnitUpdateEveryNFrames", 1,
-            new ConfigDescription("Update each unit's visuals only every N-th rendered frame (1 = every frame, the game's behaviour).",
-                new AcceptableValueRange<int>(1, 4)));
-
-        keys.Bind(config, "NoParticles", HotkeyKey.F8, "Toggle: skip unit combat particles", NoParticles.Flip, "No combat particles", () => NoParticles.On);
-        keys.Bind(config, "UnitUpdateMore", HotkeyKey.PageUp, "Update unit visuals less often (every 1..4 frames)", () => StepUnitUpdate(+1), "Unit updates: less often");
-        keys.Bind(config, "UnitUpdateLess", HotkeyKey.PageDown, "Update unit visuals more often", () => StepUnitUpdate(-1), "Unit updates: more often");
-
-        patcher.Patch("UnitVisual", "SpawnParticles", typeof(CombatEffects), prefix: nameof(SpawnParticlesPrefix));
-        patcher.Patch("UnitVisual", "Update", typeof(CombatEffects), prefix: nameof(UnitUpdatePrefix));
+        _particles = patcher.Switch("UnitVisual", "SpawnParticles", typeof(CombatEffects), prefix: nameof(SpawnParticlesPrefix));
+        _update = patcher.Switch("UnitVisual", "Update", typeof(CombatEffects), prefix: nameof(UnitUpdatePrefix));
+        Options.NoParticles.SettingChanged += (_, _) => Refresh();
+        Options.UnitUpdateEvery.SettingChanged += (_, _) => Refresh();
     }
 
-    internal static void StepUnitUpdate(int delta)
+    /// <summary>Called by the option events and the mod switch.</summary>
+    internal static void Refresh()
     {
-        UnitUpdateEvery.Value = System.Math.Clamp(UnitUpdateEvery.Value + delta, 1, 4);
-        ModPlugin.L.LogMessage("Unit visual updates: " + UnitUpdateText());
+        _particles.On = Plugin.On && Options.NoParticles.Value;
+        _update.On = Plugin.On && Options.UnitUpdateEvery.Value > 1;
     }
 
-    /// <summary>Short on purpose: it sits between the stepper's - and + buttons.</summary>
-    internal static string UnitUpdateText() => UnitUpdateEvery.Value.ToString();
+    // UnitVisual.SpawnParticles(ParticleSystem prefab): only patched while "no particles" is on
+    internal static bool SpawnParticlesPrefix() => false;
 
-    // UnitVisual.SpawnParticles(ParticleSystem prefab)
-    internal static bool SpawnParticlesPrefix()
-    {
-        ParticleCalls++;
-        if (!NoParticles.On) return true;
-        ParticlesSkipped++;
-        return false;
-    }
-
-    // UnitVisual.Update()
+    // UnitVisual.Update(): only patched while the unit animation runs every 2nd..4th frame
     internal static bool UnitUpdatePrefix(object __instance)
     {
-        int n = UnitUpdateEvery.Value;
-        if (n <= 1) return true;
-        UnitUpdatesSeen++;
-        // stagger: each unit has its own phase, derived from its (stable) native address
-        int phase = (int)((long)Mem.PtrOf(__instance) >> 5);
-        if ((UnityEngine.Time.frameCount + phase) % n == 0) return true;
-        UnitUpdatesSkipped++;
-        return false;
+        int n = Options.UnitUpdateEvery.Value;
+        int phase = (int)((long)Mem.PtrOf(__instance) >> 5);   // each unit its own phase, from its (stable) native address
+        return (UnityEngine.Time.frameCount + phase) % n == 0;
     }
 }
