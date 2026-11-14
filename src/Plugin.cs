@@ -35,6 +35,7 @@ public sealed class Plugin : BasePlugin
         var patcher = new Patcher(Guid, Log);
         CombatEffects.Install(patcher);
         AiPlacement.Install(patcher);
+        SummaryCache.Install(patcher);
         patcher.Summary();
 
         DiskWarmup.Install();
@@ -49,6 +50,8 @@ public sealed class Plugin : BasePlugin
     {
         CombatEffects.Refresh();
         AiPlacement.Refresh();
+        SummaryCache.Refresh();
+        AiSearch.Refresh();
     }
 }
 

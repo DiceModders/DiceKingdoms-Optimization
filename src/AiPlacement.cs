@@ -52,6 +52,9 @@ internal static class AiPlacement
 #endif
     }
 
+    /// <summary>The search square of the running placement search (0 = the game's); used by <see cref="AiSearch"/>, which replaces the spiral.</summary>
+    internal static int CurrentLimit => _limit;
+
     internal static void Refresh()
     {
         bool on = Plugin.On && Options.AiSearchNearTown.Value;
@@ -195,7 +198,8 @@ internal static class AiPlacement
         if (_who == null) return;   // the call was skipped (no hammer): already logged
         double f = 1000.0 / System.Diagnostics.Stopwatch.Frequency;
         double ms = (System.Diagnostics.Stopwatch.GetTimestamp() - _turnStart) * f;
-        Plugin.L.LogInfo($"[ai-stats] {_who}: build {ms:0} ms, square {(_town > 0 ? _town : 0)}, placement searches {_searches} ({_failed} failed), nature cleared {_cleaned}, slowest search {_slowest * f:0} ms");
+        Plugin.L.LogInfo($"[ai-stats] {_who}: build {ms:0} ms, square {(_town > 0 ? _town : 0)}, placement searches {_searches} ({_failed} failed), nature cleared {_cleaned}, slowest search {_slowest * f:0} ms; fast searches {AiSearch.Searches}, game's {AiSearch.Fallbacks}, different {AiSearch.Mismatches}");
+        AiSearch.Searches = AiSearch.Fallbacks = AiSearch.Mismatches = 0;
         _who = null;
     }
 

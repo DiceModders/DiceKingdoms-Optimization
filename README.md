@@ -19,6 +19,14 @@ In the mod's config file (`[Computer players]`):
 | Option | Effect |
 |---|---|
 | **SearchNearTown** (on by default) | a computer player looks for a building spot only around its town (the farthest building plus a margin), and for Docks and Fishing Ships around the nearest coast, instead of trying every tile of the island with every rotation. On a normal island that changes nothing; on a big island (Lobby Rules) it removes the freeze of several seconds on every computer turn. The town still grows outwards as it fills up. The AI runs on the host only and sends its moves like a player, so the other players do not need this mod |
+| **FastBuildingSearch** (on by default) | computer players find their building spots with a search that reads the island directly instead of going through the game's slower search. It follows the game's rules exactly: the same spot, the same rotation and the same random numbers. In the first turns, while the disease rule applies, the game's own search is used |
+| **VerifyFastBuildingSearch** (off by default) | testing only: runs both searches for every building and logs any difference; the game's result is used. Slower |
+
+In `[Interface]`:
+
+| Option | Effect |
+|---|---|
+| **FastPlayerList** (on by default) | the player list on the left recomputes each player's attack, defence and population a few times a second and at every phase change, instead of in every frame. Everything else in the list still updates every frame |
 
 Shadows, post-processing and texture size are not here: the game's own Video quality setting already switches them (its Low preset turns shadows and post-processing off).
 
@@ -39,6 +47,8 @@ To see where a battle spends its frames, use the frame-time probe of the [Extrac
 | `VideoSettings.cs` | the block in Settings > Video |
 | `CombatEffects.cs` | particles and unit animation updates (patches switched on only while an option needs them) |
 | `AiPlacement.cs` | where computer players search for building spots |
+| `AiSearch.cs` | the fast building search (replaces the game's search function natively, same results) |
+| `SummaryCache.cs` | the player list's attack, defence and population numbers, reused for a short time |
 | `DiskWarmup.cs` | reading the game files in the background |
 
 ## Requirements
