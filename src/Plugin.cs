@@ -37,6 +37,10 @@ public sealed class Plugin : BasePlugin
         AiPlacement.Install(patcher);
         SummaryCache.Install(patcher);
         patcher.Summary();
+        // switched from Settings > Video or a config editor: applied at once
+        Options.FastPlayerList.SettingChanged += (_, _) => SummaryCache.Refresh();
+        Options.AiFastSearch.SettingChanged += (_, _) => AiSearch.Refresh();
+        Options.AiFastSearchVerify.SettingChanged += (_, _) => AiSearch.Refresh();
 
         DiskWarmup.Install();
         Core.Mods.Switch(Config, description: "Turns every option of this mod on or off at once.")
