@@ -36,4 +36,8 @@
     <EmbedUntrackedSources>false</EmbedUntrackedSources>
   </PropertyGroup>
 
+  <ItemGroup>
+    <EmbeddedResource Include="texts.json" LogicalName="texts.json" />
+  </ItemGroup>
+
 </Project>

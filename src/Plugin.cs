@@ -29,6 +29,7 @@ public sealed class Plugin : BasePlugin
 
     public override void Load()
     {
+        Tx.Load();                                   // texts.json in the game's language (ModCore)
         L = Log;
         Options.Bind(Config);
 

@@ -12,23 +12,23 @@ internal static class VideoSettings
 {
     internal static void Install(UiScope ui)
     {
-        ui?.Native.Settings.AddBlock(new SettingsBlockSpec
+        Tx.Block(ui, () => new SettingsBlockSpec
         {
             Id = Plugin.Guid + ".settings",
             Page = SettingsPage.Video,
-            Title = "Optimization",
+            Title = Tx.T("block.title"),
             Order = 10,
             Build = block =>
             {
-                Toggle(block, "No combat particles", Options.NoParticles);
+                Toggle(block, Tx.T("noParticles"), Options.NoParticles);
                 var every = Options.UnitUpdateEvery;
-                var row = block.AddSlider("Unit animation every Nth frame", 1, 4, every.Value, v => every.Value = (int)v, "0", true);
+                var row = block.AddSlider(Tx.T("unitEvery"), 1, 4, every.Value, v => every.Value = (int)v, "0", true);
                 if (row != null) every.SettingChanged += (_, _) => row.SetValue(every.Value);
-                Toggle(block, "Warm up game files (hard disks)", Options.WarmUpFiles);
-                Toggle(block, "Player list: numbers a few times a second", Options.FastPlayerList);
-                Toggle(block, "Computer players: search near their town", Options.AiSearchNearTown);
-                Toggle(block, "Computer players: fast building search", Options.AiFastSearch);
-                block.AddInfo("Only this computer changes: safe with players who do not have the mod. Computer players only run on the host.");
+                Toggle(block, Tx.T("warmUp"), Options.WarmUpFiles);
+                Toggle(block, Tx.T("fastPlayerList"), Options.FastPlayerList);
+                Toggle(block, Tx.T("aiNearTown"), Options.AiSearchNearTown);
+                Toggle(block, Tx.T("aiFast"), Options.AiFastSearch);
+                block.AddInfo(Tx.T("info"));
             },
         });
     }
