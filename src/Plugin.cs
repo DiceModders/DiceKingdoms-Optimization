@@ -21,7 +21,7 @@ public sealed class Plugin : BasePlugin
 {
     public const string Guid = "org.dicemodders.dicekingdoms.optimization";
     public const string Name = "DiceKingdoms Optimization";
-    public const string Version = "2.0.0";
+    public const string Version = "1.0.0";
 
     internal static ManualLogSource L;
     /// <summary>The mod's own on/off switch ([General] Enabled); while off every option behaves like the game.</summary>
